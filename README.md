@@ -14,6 +14,8 @@ An Obsidian plugin that finds notes with a matching Notion page, shows the two s
 
 If neither matches, you can pick a page by searching Notion.
 
+To limit **Scan vault** to certain folders, list them under **Folders to scan** in settings, one per line. Subfolders are included. Leave it empty to scan the whole vault. Comparing a single note works wherever the note is.
+
 ## Using it
 
 - **Matches panel.** The ribbon icon or the command **Open Notion matches** opens the panel. **Scan vault** lists every note linked to or sharing a title with a Notion page, and each row has a compare button.

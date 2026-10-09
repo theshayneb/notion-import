@@ -83,19 +83,20 @@ export class TitleIndex {
   }
 }
 
-function isExcluded(file: TFile, settings: NotionImportSettings): boolean {
-  return settings.excludedFolders
+/** True when no folders are listed, or the file is inside one of them (subfolders included). */
+function isInScannedFolders(file: TFile, settings: NotionImportSettings): boolean {
+  const folders = settings.includedFolders
     .split("\n")
     .map(folder => folder.trim().replace(/^\/+|\/+$/g, ""))
-    .filter(Boolean)
-    .some(folder => file.path === folder || file.path.startsWith(`${folder}/`));
+    .filter(Boolean);
+  return !folders.length || folders.some(folder => file.path.startsWith(`${folder}/`));
 }
 
 export async function scanVault(app: App, client: NotionClient, settings: NotionImportSettings): Promise<{ matches: NoteMatch[]; pageCount: number | null }> {
   const index = settings.matchByTitle ? await TitleIndex.build(client, settings.ignoreCase) : null;
   const matches: NoteMatch[] = [];
   for (const file of app.vault.getMarkdownFiles()) {
-    if (isExcluded(file, settings)) continue;
+    if (!isInScannedFolders(file, settings)) continue;
     const linked = propertyCandidate(app, file, settings);
     if (linked) {
       matches.push({ file, candidates: [linked] });

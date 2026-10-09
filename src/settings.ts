@@ -14,7 +14,7 @@ export interface NotionImportSettings {
   downloadAttachments: boolean;
   calloutStyle: CalloutStyle;
   defaultInsert: DefaultInsert;
-  excludedFolders: string;
+  includedFolders: string;
 }
 
 export const DEFAULT_SETTINGS: NotionImportSettings = {
@@ -27,7 +27,7 @@ export const DEFAULT_SETTINGS: NotionImportSettings = {
   downloadAttachments: true,
   calloutStyle: "plain",
   defaultInsert: "end",
-  excludedFolders: "",
+  includedFolders: "",
 };
 
 export class NotionImportSettingTab extends PluginSettingTab {
@@ -107,11 +107,11 @@ export class NotionImportSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("Excluded folders")
-      .setDesc("One folder path per line. Notes in these folders are skipped when scanning.")
+      .setName("Folders to scan")
+      .setDesc("One folder path per line. Scanning only looks at notes in these folders and their subfolders. Leave empty to scan the whole vault.")
       .addTextArea(text =>
-        text.setValue(settings.excludedFolders).onChange(async value => {
-          settings.excludedFolders = value;
+        text.setPlaceholder("Example: projects/work").setValue(settings.includedFolders).onChange(async value => {
+          settings.includedFolders = value;
           await save();
         }),
       );
