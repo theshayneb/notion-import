@@ -2,9 +2,10 @@ import { TFile, type App } from "obsidian";
 import type { NotionClient } from "./notion/client";
 import type { NotionPageSummary } from "./notion/types";
 import type { NotionImportSettings } from "./settings";
+import { FuzzyIndex, fuzzyKey } from "./fuzzy";
 import { extractPageId, normalizeTitle } from "./text";
 
-export type MatchSource = "property" | "title" | "manual";
+export type MatchSource = "property" | "title" | "fuzzy" | "manual";
 
 export interface NotionCandidate {
   pageId: string;
@@ -12,6 +13,8 @@ export interface NotionCandidate {
   title: string;
   url: string;
   via: MatchSource;
+  /** Title similarity from 0 to 1, for title and fuzzy matches. */
+  score?: number;
 }
 
 export interface NoteMatch {
@@ -48,39 +51,61 @@ function titlesFor(app: App, file: TFile, settings: NotionImportSettings): strin
   return titles;
 }
 
-/** Every page shared with the integration, keyed by normalised title. */
+export interface TitleHit {
+  page: NotionPageSummary;
+  /** 1 for an exact title match, lower for a similar one. */
+  score: number;
+}
+
+/** Every page shared with the integration, indexed for exact and fuzzy title lookups. */
 export class TitleIndex {
-  private constructor(private readonly byTitle: Map<string, NotionPageSummary[]>, private readonly ignoreCase: boolean) {}
+  private readonly exact = new Map<string, NotionPageSummary[]>();
+  private readonly fuzzy = new FuzzyIndex<NotionPageSummary>();
+  readonly size: number;
+
+  private constructor(pages: NotionPageSummary[], private readonly ignoreCase: boolean) {
+    this.size = pages.length;
+    for (const page of pages) {
+      const key = normalizeTitle(page.title, ignoreCase);
+      if (key) this.exact.set(key, [...(this.exact.get(key) ?? []), page]);
+      this.fuzzy.add(fuzzyKey(page.title), page);
+    }
+  }
 
   static async build(client: NotionClient, ignoreCase: boolean): Promise<TitleIndex> {
-    const map = new Map<string, NotionPageSummary[]>();
-    for (const page of await client.searchPages("")) {
-      const key = normalizeTitle(page.title, ignoreCase);
-      if (!key) continue;
-      map.set(key, [...(map.get(key) ?? []), page]);
-    }
-    return new TitleIndex(map, ignoreCase);
+    return new TitleIndex(await client.searchPages(""), ignoreCase);
   }
 
-  get size(): number {
-    let count = 0;
-    for (const pages of this.byTitle.values()) count += pages.length;
-    return count;
-  }
-
-  lookup(titles: string[]): NotionPageSummary[] {
-    const seen = new Set<string>();
-    const found: NotionPageSummary[] = [];
+  /**
+   * Exact matches win outright. Without one, and when `fuzzyThreshold` is set, the
+   * closest similar titles are returned, best first.
+   */
+  lookup(titles: string[], fuzzyThreshold: number | null): TitleHit[] {
+    const found = new Map<string, TitleHit>();
     for (const title of titles) {
-      for (const page of this.byTitle.get(normalizeTitle(title, this.ignoreCase)) ?? []) {
-        if (!seen.has(page.id)) {
-          seen.add(page.id);
-          found.push(page);
-        }
+      for (const page of this.exact.get(normalizeTitle(title, this.ignoreCase)) ?? []) found.set(page.id, { page, score: 1 });
+    }
+    if (found.size || fuzzyThreshold == null) return [...found.values()];
+    for (const title of titles) {
+      for (const { item, score } of this.fuzzy.search(fuzzyKey(title), fuzzyThreshold, MAX_FUZZY_CANDIDATES)) {
+        if ((found.get(item.id)?.score ?? 0) < score) found.set(item.id, { page: item, score });
       }
     }
-    return found;
+    return [...found.values()].sort((a, b) => b.score - a.score).slice(0, MAX_FUZZY_CANDIDATES);
   }
+}
+
+const MAX_FUZZY_CANDIDATES = 3;
+
+function titleCandidates(app: App, file: TFile, settings: NotionImportSettings, index: TitleIndex): NotionCandidate[] {
+  const threshold = settings.fuzzyMatching ? settings.fuzzyThreshold / 100 : null;
+  return index.lookup(titlesFor(app, file, settings), threshold).map(({ page, score }) => ({
+    pageId: page.id,
+    title: page.title,
+    url: page.url,
+    via: score >= 1 ? "title" : "fuzzy",
+    score,
+  }));
 }
 
 /** True when no folders are listed, or the file is inside one of them (subfolders included). */
@@ -92,40 +117,41 @@ function isInScannedFolders(file: TFile, settings: NotionImportSettings): boolea
   return !folders.length || folders.some(folder => file.path.startsWith(`${folder}/`));
 }
 
-export async function scanVault(app: App, client: NotionClient, settings: NotionImportSettings): Promise<{ matches: NoteMatch[]; pageCount: number | null }> {
-  const index = settings.matchByTitle ? await TitleIndex.build(client, settings.ignoreCase) : null;
+export async function scanVault(
+  app: App,
+  settings: NotionImportSettings,
+  getIndex: () => Promise<TitleIndex>,
+): Promise<{ matches: NoteMatch[]; pageCount: number | null }> {
+  const index = settings.matchByTitle ? await getIndex() : null;
   const matches: NoteMatch[] = [];
-  for (const file of app.vault.getMarkdownFiles()) {
+  const files = app.vault.getMarkdownFiles();
+  for (const [i, file] of files.entries()) {
+    // Let Obsidian repaint now and then; fuzzy matching a large vault takes a moment.
+    if (i % 250 === 249) await new Promise(resolve => window.setTimeout(resolve, 0));
     if (!isInScannedFolders(file, settings)) continue;
     const linked = propertyCandidate(app, file, settings);
     if (linked) {
       matches.push({ file, candidates: [linked] });
       continue;
     }
-    const byTitle = index?.lookup(titlesFor(app, file, settings)) ?? [];
-    if (byTitle.length) {
-      matches.push({ file, candidates: byTitle.map(page => ({ pageId: page.id, title: page.title, url: page.url, via: "title" })) });
-    }
+    const byTitle = index ? titleCandidates(app, file, settings, index) : [];
+    if (byTitle.length) matches.push({ file, candidates: byTitle });
   }
   matches.sort((a, b) => a.file.basename.localeCompare(b.file.basename));
   return { matches, pageCount: index ? index.size : null };
 }
 
-/** Candidates for one note: its link property, else Notion pages whose title matches. */
-export async function matchFile(app: App, client: NotionClient, settings: NotionImportSettings, file: TFile): Promise<NotionCandidate[]> {
+/** Candidates for one note: its link property, else Notion pages with the same or a similar title. */
+export async function matchFile(
+  app: App,
+  settings: NotionImportSettings,
+  file: TFile,
+  getIndex: () => Promise<TitleIndex>,
+): Promise<NotionCandidate[]> {
   const linked = propertyCandidate(app, file, settings);
   if (linked) return [linked];
   if (!settings.matchByTitle) return [];
-  const titles = titlesFor(app, file, settings).map(title => normalizeTitle(title, settings.ignoreCase));
-  const found: NotionCandidate[] = [];
-  for (const title of new Set(titles)) {
-    for (const page of await client.searchPages(title, 100)) {
-      if (titles.includes(normalizeTitle(page.title, settings.ignoreCase)) && !found.some(c => c.pageId === page.id)) {
-        found.push({ pageId: page.id, title: page.title, url: page.url, via: "title" });
-      }
-    }
-  }
-  return found;
+  return titleCandidates(app, file, settings, await getIndex());
 }
 
 export function isMarkdownFile(file: unknown): file is TFile {

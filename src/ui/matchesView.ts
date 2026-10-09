@@ -50,10 +50,11 @@ export class MatchesView extends ItemView {
     if (this.plugin.scanError) status.setText(this.plugin.scanError);
     else if (!result) status.setText("Scan the vault to find notes with a matching Notion page.");
     else {
-      const linked = result.matches.filter(match => match.candidates[0].via === "property").length;
-      const titled = result.matches.length - linked;
+      const count = (via: string) => result.matches.filter(match => match.candidates[0].via === via).length;
       const pages = result.pageCount == null ? "" : ` (out of ${result.pageCount} Notion pages shared with the integration)`;
-      status.setText(`${linked} linked by property, ${titled} matched by title${pages}.`);
+      status.setText(
+        `${count("property")} linked by property, ${count("title")} with the same title, ${count("fuzzy")} with a similar title${pages}.`,
+      );
     }
 
     const list = container.createDiv({ cls: "notion-import-view-list" });
@@ -80,12 +81,23 @@ export class MatchesView extends ItemView {
       name.createDiv({ cls: "notion-import-muted notion-import-view-path", text: match.file.parent.path });
     }
 
-    const via = match.candidates[0].via;
+    const best = match.candidates[0];
+    // Similar-title matches show which Notion page they found, so wrong guesses are easy to spot.
+    if (best.via === "fuzzy") {
+      const others = match.candidates.length > 1 ? ` (+${match.candidates.length - 1} more)` : "";
+      name.createDiv({ cls: "notion-import-muted notion-import-view-path", text: `→ ${best.title}${others}` });
+    }
+
+    const label =
+      best.via === "property"
+        ? "Linked"
+        : best.via === "fuzzy"
+          ? `Similar ${Math.round((best.score ?? 0) * 100)}%`
+          : match.candidates.length > 1
+            ? `Title ×${match.candidates.length}`
+            : "Title";
+    const badge = row.createSpan({ cls: `notion-import-badge is-${best.via}`, text: label });
     const titles = match.candidates.map(candidate => candidate.title).filter(Boolean);
-    const badge = row.createSpan({
-      cls: `notion-import-badge is-${via}`,
-      text: via === "property" ? "Linked" : match.candidates.length > 1 ? `Title ×${match.candidates.length}` : "Title",
-    });
     if (titles.length) badge.setAttr("aria-label", titles.join(", "));
 
     const compare = row.createEl("button", { cls: "clickable-icon", attr: { "aria-label": "Compare with Notion" } });

@@ -11,6 +11,7 @@ An Obsidian plugin that finds notes with a matching Notion page, shows the two s
    ---
    ```
 2. **Title.** Notes without a link match pages whose Notion title equals the note's file name or one of its aliases. Matching ignores case and characters that file names can't contain, such as `:` and `/`.
+3. **Similar title.** If no title matches exactly, the plugin looks for similar ones. That covers a typo or changed character (`Recieve invoices` → `Receive invoices`) and an added, missing or reordered word (`Project plan` → `Project plan v2`, `Meeting notes Acme` → `Acme meeting notes`). Punctuation, accents and emoji are ignored. Each note shows up to three candidates, best first, with a similarity percentage and the Notion title it found, so a wrong guess is easy to spot. **Fuzzy match strictness** in settings sets how close a title must be. The default is 80%, and lower values find more matches but more wrong ones. Titles under four characters only match exactly.
 
 If neither matches, you can pick a page by searching Notion.
 

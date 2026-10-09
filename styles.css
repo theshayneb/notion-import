@@ -248,3 +248,8 @@
 .notion-import-view-path {
   font-size: var(--font-ui-smaller);
 }
+
+.notion-import-badge.is-fuzzy {
+  background: hsla(var(--color-orange-rgb), 0.18);
+  color: var(--color-orange);
+}

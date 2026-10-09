@@ -1,5 +1,5 @@
 import { Notice, Plugin, type TFile } from "obsidian";
-import { isMarkdownFile, matchFile, scanVault, type NoteMatch, type NotionCandidate } from "./match";
+import { TitleIndex, isMarkdownFile, matchFile, scanVault, type NoteMatch, type NotionCandidate } from "./match";
 import { NotionClient } from "./notion/client";
 import { DEFAULT_SETTINGS, NotionImportSettingTab, type NotionImportSettings } from "./settings";
 import { CompareModal } from "./ui/compareModal";
@@ -12,6 +12,7 @@ export default class NotionImportPlugin extends Plugin {
   scanError = "";
   scanning = false;
   private client: NotionClient | null = null;
+  private titleIndex: { index: Promise<TitleIndex>; builtAt: number } | null = null;
 
   async onload(): Promise<void> {
     await this.loadSettings();
@@ -82,7 +83,25 @@ export default class NotionImportPlugin extends Plugin {
 
   async saveSettings(): Promise<void> {
     this.client = null;
+    this.titleIndex = null;
     await this.saveData(this.settings);
+  }
+
+  /**
+   * All Notion page titles, fetched once and reused for 10 minutes so comparing
+   * single notes stays quick. A vault scan always fetches a fresh list.
+   */
+  getTitleIndex(refresh = false): Promise<TitleIndex> {
+    const fresh = this.titleIndex && Date.now() - this.titleIndex.builtAt < 10 * 60 * 1000;
+    if (refresh || !fresh) {
+      const index = TitleIndex.build(this.notion, this.settings.ignoreCase);
+      const entry = { index, builtAt: Date.now() };
+      this.titleIndex = entry;
+      index.catch(() => {
+        if (this.titleIndex === entry) this.titleIndex = null;
+      });
+    }
+    return this.titleIndex!.index;
   }
 
   async openMatchesView(): Promise<void> {
@@ -105,7 +124,7 @@ export default class NotionImportPlugin extends Plugin {
     this.scanError = "";
     this.refreshViews();
     try {
-      this.lastScan = await scanVault(this.app, this.notion, this.settings);
+      this.lastScan = await scanVault(this.app, this.settings, () => this.getTitleIndex(true));
     } catch (error) {
       this.scanError = error instanceof Error ? error.message : String(error);
     } finally {
@@ -117,7 +136,7 @@ export default class NotionImportPlugin extends Plugin {
   async compareFile(file: TFile): Promise<void> {
     let candidates: NotionCandidate[];
     try {
-      candidates = await matchFile(this.app, this.notion, this.settings, file);
+      candidates = await matchFile(this.app, this.settings, file, () => this.getTitleIndex());
     } catch (error) {
       new Notice(error instanceof Error ? error.message : String(error));
       return;

@@ -10,8 +10,14 @@ type Target = { kind: "end" } | { kind: "cursor" } | { kind: "heading"; heading:
 const VIA_LABEL: Record<NotionCandidate["via"], string> = {
   property: "linked in frontmatter",
   title: "matched by title",
+  fuzzy: "similar title",
   manual: "picked by you",
 };
+
+function viaLabel(candidate: NotionCandidate): string {
+  const label = VIA_LABEL[candidate.via];
+  return candidate.via === "fuzzy" && candidate.score != null ? `${label} (${Math.round(candidate.score * 100)}%)` : label;
+}
 
 export class CompareModal extends Modal {
   private readonly component = new Component();
@@ -55,9 +61,12 @@ export class CompareModal extends Modal {
 
     if (this.candidates.length > 1) {
       const pick = contentEl.createDiv({ cls: "notion-import-candidates" });
-      pick.createSpan({ text: `${this.candidates.length} Notion pages match. Compare with: ` });
+      pick.createSpan({ text: `${this.candidates.length} Notion pages could match. Compare with: ` });
       const select = pick.createEl("select", { cls: "dropdown" });
-      this.candidates.forEach((candidate, index) => select.createEl("option", { value: String(index), text: candidate.title || candidate.pageId }));
+      this.candidates.forEach((candidate, index) => select.createEl("option", {
+          value: String(index),
+          text: `${candidate.title || candidate.pageId} — ${viaLabel(candidate)}`,
+        }));
       select.addEventListener("change", () => {
         this.candidate = this.candidates[Number(select.value)];
         void this.loadNotion();
@@ -208,7 +217,7 @@ export class CompareModal extends Modal {
       this.notionTitleEl.empty();
       const link = this.notionTitleEl.createEl("a", { text: page.title, href: page.url });
       link.setAttr("target", "_blank");
-      this.notionTitleEl.createSpan({ cls: "notion-import-via", text: ` · ${VIA_LABEL[this.candidate.via]}` });
+      this.notionTitleEl.createSpan({ cls: "notion-import-via", text: ` · ${viaLabel(this.candidate)}` });
       this.units = blocksToUnits(blocks, { calloutStyle: this.plugin.settings.calloutStyle });
       const note = normalizeForCompare(this.noteText);
       this.inNote = this.units.map(unit => {

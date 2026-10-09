@@ -10,6 +10,9 @@ export interface NotionImportSettings {
   matchByTitle: boolean;
   matchAliases: boolean;
   ignoreCase: boolean;
+  fuzzyMatching: boolean;
+  /** Minimum title similarity, as a percentage, for a fuzzy match. */
+  fuzzyThreshold: number;
   writeLinkOnMatch: boolean;
   downloadAttachments: boolean;
   calloutStyle: CalloutStyle;
@@ -23,6 +26,8 @@ export const DEFAULT_SETTINGS: NotionImportSettings = {
   matchByTitle: true,
   matchAliases: true,
   ignoreCase: true,
+  fuzzyMatching: true,
+  fuzzyThreshold: 80,
   writeLinkOnMatch: true,
   downloadAttachments: true,
   calloutStyle: "plain",
@@ -104,6 +109,32 @@ export class NotionImportSettingTab extends PluginSettingTab {
           settings.ignoreCase = value;
           await save();
         }),
+      );
+
+    new Setting(containerEl)
+      .setName("Fuzzy title matching")
+      .setDesc(
+        "When no title matches exactly, also match similar titles: a typo, a changed character, or an added, " +
+          "missing or reordered word. Punctuation, accents and emoji are ignored.",
+      )
+      .addToggle(toggle =>
+        toggle.setValue(settings.fuzzyMatching).onChange(async value => {
+          settings.fuzzyMatching = value;
+          await save();
+        }),
+      );
+
+    new Setting(containerEl)
+      .setName("Fuzzy match strictness")
+      .setDesc("How similar titles must be, in percent. Lower finds more matches but more wrong ones. The default is 80.")
+      .addSlider(slider =>
+        slider
+          .setLimits(50, 95, 5)
+          .setValue(settings.fuzzyThreshold)
+          .onChange(async value => {
+            settings.fuzzyThreshold = value;
+            await save();
+          }),
       );
 
     new Setting(containerEl)
