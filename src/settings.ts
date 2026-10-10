@@ -19,6 +19,10 @@ export interface NotionImportSettings {
   calloutStyle: CalloutStyle;
   defaultInsert: DefaultInsert;
   includedFolders: string;
+  /** Notes marked "Skip every time" in a review, by path. */
+  ignoredNotes: string[];
+  skipComplete: boolean;
+  preselectMissing: boolean;
 }
 
 export const DEFAULT_SETTINGS: NotionImportSettings = {
@@ -34,6 +38,9 @@ export const DEFAULT_SETTINGS: NotionImportSettings = {
   calloutStyle: "plain",
   defaultInsert: "end",
   includedFolders: "",
+  ignoredNotes: [],
+  skipComplete: true,
+  preselectMissing: true,
 };
 
 export class NotionImportSettingTab extends PluginSettingTab {
@@ -165,6 +172,46 @@ export class NotionImportSettingTab extends PluginSettingTab {
       }),
     );
     showCounts();
+
+    new Setting(containerEl).setName("Reviewing").setHeading();
+
+    new Setting(containerEl)
+      .setName("Pass over notes that already have everything")
+      .setDesc("In a review, don't stop at notes that already contain every block of their Notion page.")
+      .addToggle(toggle =>
+        toggle.setValue(settings.skipComplete).onChange(async value => {
+          settings.skipComplete = value;
+          await save();
+        }),
+      );
+
+    new Setting(containerEl)
+      .setName("Tick missing blocks to start with")
+      .setDesc("Open the compare window with every block that isn't already in the note ticked. Untick what you don't want.")
+      .addToggle(toggle =>
+        toggle.setValue(settings.preselectMissing).onChange(async value => {
+          settings.preselectMissing = value;
+          await save();
+        }),
+      );
+
+    const skipped = new Setting(containerEl)
+      .setName("Notes skipped every time")
+      .setDesc(
+        settings.ignoredNotes.length
+          ? "Reviews and scans pass over these notes. Remove one to have it reviewed again."
+          : "Nothing yet. Choose “Skip every time” in a review to have reviews pass over a note.",
+      );
+    const skippedList = skipped.descEl.createDiv({ cls: "notion-import-skipped" });
+    for (const path of settings.ignoredNotes) {
+      const row = skippedList.createDiv({ cls: "notion-import-skipped-row" });
+      row.createEl("code", { text: path });
+      row.createEl("button", { text: "Remove" }).addEventListener("click", () => {
+        settings.ignoredNotes = settings.ignoredNotes.filter(other => other !== path);
+        row.remove();
+        void save();
+      });
+    }
 
     new Setting(containerEl).setName("Importing").setHeading();
 

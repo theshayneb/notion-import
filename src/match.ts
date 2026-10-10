@@ -147,10 +147,11 @@ export async function scanVault(
   const matches: NoteMatch[] = [];
   const files = app.vault.getMarkdownFiles();
   let notesChecked = 0;
+  const ignored = new Set(settings.ignoredNotes);
   for (const [i, file] of files.entries()) {
     // Let Obsidian repaint now and then; fuzzy matching a large vault takes a moment.
     if (i % 250 === 249) await new Promise(resolve => window.setTimeout(resolve, 0));
-    if (!isInScannedFolders(file, settings)) continue;
+    if (!isInScannedFolders(file, settings) || ignored.has(file.path)) continue;
     notesChecked++;
     const linked = propertyCandidate(app, file, settings);
     if (linked) {

@@ -285,3 +285,16 @@
 .notion-import-folder-counts {
   margin-top: var(--size-4-1);
 }
+
+/* Review */
+.notion-import-position {
+  font-weight: var(--font-semibold);
+}
+
+.notion-import-skipped-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--size-4-2);
+  margin-top: var(--size-4-1);
+}

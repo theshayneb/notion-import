@@ -28,11 +28,21 @@ To limit **Scan vault** to certain folders, list them under **Folders to scan** 
 
 ## Using it
 
-- **Matches panel.** The ribbon icon or the command **Open Notion matches** opens the panel. **Scan vault** lists every note linked to or sharing a title with a Notion page, and each row has a compare button.
+- **Review note by note.** The ribbon icon, or the command **Review Notion matches note by note**, scans the vault and then opens the compare window for each matched note in turn, showing "3 of 41".
+  - **Import & next** imports the ticked blocks.
+  - **Link only** saves the Notion link without importing anything.
+  - **Skip** moves on.
+  - **Skip every time** leaves the note out of future reviews. Undo it under **Notes skipped every time** in settings.
+  - **Different Notion page…** compares the note with another page you search for.
+  - **Stop** ends the review. Closing the window counts as a skip.
+  - Notes that already contain everything from their Notion page are passed over. You can turn that off in settings.
+  - The next note's Notion page loads while you review the current one.
+- **Matches panel.** The command **Open Notion matches** opens the panel. **Scan & review** starts the note-by-note review, and **Scan only** just lists the matches, each with a compare button.
 - **Compare current note with Notion.** This works from the command palette or by right-clicking a note → **Compare with Notion**.
 - **Compare window.** It shows the Obsidian note on the left and the Notion page on the right, with each Notion block on its own row.
   - Blocks whose text already appears in the note are marked **In note** and dimmed. You can hide them.
-  - Tick single blocks, or use the **Section** button on a Notion heading to select the heading and everything under it. You can mix both.
+  - Blocks not already in the note start ticked. You can turn that off in settings.
+  - Tick or untick single blocks, or use the **Section** button on a Notion heading to select the heading and everything under it. You can mix both.
   - **Select missing** ticks every block not already in the note.
   - Choose where to insert: the end of the note, the cursor (when the note is open), or the end of a section under one of the note's headings.
   - Notion headings are demoted automatically when inserted under a heading, so a Notion H1 under an Obsidian H2 becomes an H3. You can change how many levels.

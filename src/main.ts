@@ -4,6 +4,7 @@ import { NotionClient } from "./notion/client";
 import { DEFAULT_SETTINGS, NotionImportSettingTab, type NotionImportSettings } from "./settings";
 import { CompareModal } from "./ui/compareModal";
 import { MATCHES_VIEW_TYPE, MatchesView } from "./ui/matchesView";
+import { reviewMatches } from "./review";
 import { DiagnoseModal } from "./ui/diagnoseModal";
 import { PageSuggestModal } from "./ui/pageSuggest";
 
@@ -20,7 +21,7 @@ export default class NotionImportPlugin extends Plugin {
     this.addSettingTab(new NotionImportSettingTab(this.app, this));
     this.registerView(MATCHES_VIEW_TYPE, leaf => new MatchesView(leaf, this));
 
-    this.addRibbonIcon("file-input", "Open Notion matches", () => void this.openMatchesView());
+    this.addRibbonIcon("file-input", "Review Notion matches", () => void this.scanAndReview());
 
     this.addCommand({
       id: "open-matches",
@@ -29,13 +30,29 @@ export default class NotionImportPlugin extends Plugin {
     });
 
     this.addCommand({
+      id: "review-matches",
+      name: "Review Notion matches note by note",
+      callback: () => void this.scanAndReview(),
+    });
+
+    this.addCommand({
       id: "scan-vault",
-      name: "Scan vault for Notion matches",
+      name: "Scan vault for Notion matches (list in the side panel)",
       callback: async () => {
         await this.openMatchesView();
         await this.scan();
       },
     });
+
+    // Keep "Skip every time" attached to a note when it's renamed or moved.
+    this.registerEvent(
+      this.app.vault.on("rename", (file, oldPath) => {
+        const index = this.settings.ignoredNotes.indexOf(oldPath);
+        if (index < 0) return;
+        this.settings.ignoredNotes[index] = file.path;
+        void this.saveData(this.settings);
+      }),
+    );
 
     this.addCommand({
       id: "compare-current-note",
@@ -134,6 +151,19 @@ export default class NotionImportPlugin extends Plugin {
     for (const leaf of this.app.workspace.getLeavesOfType(MATCHES_VIEW_TYPE)) {
       if (leaf.view instanceof MatchesView) leaf.view.render();
     }
+  }
+
+  /** Scans the vault, then opens the compare window for each matched note in turn. */
+  async scanAndReview(): Promise<void> {
+    if (this.scanning) return;
+    const notice = new Notice("Looking for notes that match Notion pages…", 0);
+    await this.scan();
+    notice.hide();
+    if (this.scanError) {
+      new Notice(this.scanError);
+      return;
+    }
+    if (this.lastScan) await reviewMatches(this, this.lastScan.matches);
   }
 
   async scan(): Promise<void> {

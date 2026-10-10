@@ -1,9 +1,20 @@
 import { Component, MarkdownRenderer, MarkdownView, Modal, Notice, requestUrl, setIcon, type TFile } from "obsidian";
 import type NotionImportPlugin from "../main";
+import { loadComparison, type Comparison } from "../compare";
 import type { NotionCandidate } from "../match";
-import { blocksToUnits, joinUnits, sectionRange, shiftHeading, type AssetRef, type ImportUnit } from "../notion/markdown";
-import { summarizePage } from "../notion/types";
-import { appendBlock, findHeadings, insertUnderHeading, normalizeForCompare, type HeadingInfo } from "../text";
+import { joinUnits, sectionRange, shiftHeading, type AssetRef, type ImportUnit } from "../notion/markdown";
+import { appendBlock, findHeadings, insertUnderHeading, type HeadingInfo } from "../text";
+import { PageSuggestModal } from "./pageSuggest";
+
+/** What happened to a note in a one-by-one review. */
+export type ReviewChoice = "imported" | "linked" | "skip" | "ignore" | "stop";
+
+export interface ReviewOptions {
+  position: number;
+  total: number;
+  /** Called once with the choice; closing the window counts as a skip. */
+  resolve: (choice: ReviewChoice) => void;
+}
 
 type Target = { kind: "end" } | { kind: "cursor" } | { kind: "heading"; heading: HeadingInfo; occurrence: number };
 
@@ -35,6 +46,7 @@ export class CompareModal extends Modal {
   private loadToken = 0;
   private rows: { row: HTMLElement; checkbox: HTMLInputElement }[] = [];
   private emptyNotice: HTMLElement | null = null;
+  private decided = false;
 
   private notePaneBody!: HTMLElement;
   private notionTitleEl!: HTMLElement;
@@ -44,8 +56,16 @@ export class CompareModal extends Modal {
   private targetSelect!: HTMLSelectElement;
   private offsetSelect!: HTMLSelectElement;
   private writeLinkRow!: HTMLElement;
+  private linkOnlyButton: HTMLButtonElement | null = null;
 
-  constructor(private readonly plugin: NotionImportPlugin, private readonly file: TFile, private readonly candidates: NotionCandidate[]) {
+  constructor(
+    private readonly plugin: NotionImportPlugin,
+    private readonly file: TFile,
+    private readonly candidates: NotionCandidate[],
+    private readonly review: ReviewOptions | null = null,
+    /** Already-loaded Notion content for the first candidate, so the review doesn't fetch it twice. */
+    private preloaded: Comparison | null = null,
+  ) {
     super(plugin.app);
     this.candidate = candidates[0];
     this.writeLink = plugin.settings.writeLinkOnMatch;
@@ -55,23 +75,30 @@ export class CompareModal extends Modal {
   onOpen(): void {
     this.component.load();
     this.modalEl.addClass("notion-import-modal");
-    this.setTitle(`Compare “${this.file.basename}” with Notion`);
+    this.setTitle(this.review ? `Review “${this.file.basename}”` : `Compare “${this.file.basename}” with Notion`);
     const { contentEl } = this;
     contentEl.empty();
 
-    if (this.candidates.length > 1) {
-      const pick = contentEl.createDiv({ cls: "notion-import-candidates" });
-      pick.createSpan({ text: `${this.candidates.length} Notion pages could match. Compare with: ` });
-      const select = pick.createEl("select", { cls: "dropdown" });
-      this.candidates.forEach((candidate, index) => select.createEl("option", {
-          value: String(index),
-          text: `${candidate.title || candidate.pageId} — ${viaLabel(candidate)}`,
-        }));
-      select.addEventListener("change", () => {
-        this.candidate = this.candidates[Number(select.value)];
-        void this.loadNotion();
-      });
+    const top = contentEl.createDiv({ cls: "notion-import-candidates" });
+    if (this.review) {
+      top.createSpan({ cls: "notion-import-position", text: `${this.review.position} of ${this.review.total}` });
+      top.createEl("code", { text: this.file.path });
     }
+    const pick = top.createSpan({ cls: "notion-import-candidate-pick" });
+    this.renderCandidatePicker(pick);
+    const different = top.createEl("button", { text: "Different Notion page…" });
+    different.addEventListener("click", () =>
+      new PageSuggestModal(this.app, this.plugin.notion, this.file.basename, page => {
+        const existing = this.candidates.findIndex(candidate => candidate.pageId === page.id);
+        if (existing >= 0) this.candidate = this.candidates[existing];
+        else {
+          this.candidate = { pageId: page.id, title: page.title, url: page.url, via: "manual" };
+          this.candidates.unshift(this.candidate);
+        }
+        this.renderCandidatePicker(pick);
+        void this.loadNotion();
+      }).open(),
+    );
 
     const panes = contentEl.createDiv({ cls: "notion-import-panes" });
 
@@ -117,6 +144,34 @@ export class CompareModal extends Modal {
     this.loadToken++;
     this.component.unload();
     this.contentEl.empty();
+    if (this.review && !this.decided) {
+      this.decided = true;
+      this.review.resolve("skip");
+    }
+  }
+
+  private decide(choice: ReviewChoice): void {
+    if (this.review && !this.decided) {
+      this.decided = true;
+      this.review.resolve(choice);
+    }
+    this.close();
+  }
+
+  /** The page being compared, with a dropdown when several could match. */
+  private renderCandidatePicker(parent: HTMLElement): void {
+    parent.empty();
+    if (this.candidates.length < 2) return;
+    parent.createSpan({ text: `${this.candidates.length} Notion pages could match. Compare with: ` });
+    const select = parent.createEl("select", { cls: "dropdown" });
+    this.candidates.forEach((candidate, index) =>
+      select.createEl("option", { value: String(index), text: `${candidate.title || candidate.pageId} — ${viaLabel(candidate)}` }),
+    );
+    select.value = String(this.candidates.indexOf(this.candidate));
+    select.addEventListener("change", () => {
+      this.candidate = this.candidates[Number(select.value)];
+      void this.loadNotion();
+    });
   }
 
   private toolbarButton(parent: HTMLElement, text: string, onClick: () => void): void {
@@ -151,7 +206,20 @@ export class CompareModal extends Modal {
     const actions = footer.createDiv({ cls: "notion-import-actions" });
     this.countEl = actions.createSpan({ cls: "notion-import-count" });
     actions.createEl("button", { text: "Copy" }).addEventListener("click", () => void this.copySelection());
-    this.importButton = actions.createEl("button", { cls: "mod-cta", text: "Import" });
+    if (this.review) {
+      this.linkOnlyButton = actions.createEl("button", {
+        text: "Link only",
+        attr: { "aria-label": `Save the page link to “${this.plugin.settings.propertyName}” without importing anything` },
+      });
+      this.linkOnlyButton.addEventListener("click", () => void this.linkOnly());
+      actions.createEl("button", { text: "Skip" }).addEventListener("click", () => this.decide("skip"));
+      actions
+        .createEl("button", { text: "Skip every time", attr: { "aria-label": "Leave this note out of every review; undo in settings" } })
+        .addEventListener("click", () => this.decide("ignore"));
+      const stop = actions.createEl("button", { cls: "mod-warning", text: "Stop" });
+      stop.addEventListener("click", () => this.decide("stop"));
+    }
+    this.importButton = actions.createEl("button", { cls: "mod-cta", text: this.review ? "Import & next" : "Import" });
     this.importButton.addEventListener("click", () => void this.importSelection());
   }
 
@@ -207,23 +275,25 @@ export class CompareModal extends Modal {
     this.listEl.createEl("p", { cls: "notion-import-muted", text: "Loading the Notion page…" });
     this.notionTitleEl.setText(this.candidate.title || "…");
     this.writeLinkRow.toggle(this.candidate.via !== "property");
+    this.linkOnlyButton?.toggle(this.candidate.via !== "property");
     this.updateCount();
     try {
-      const notion = this.plugin.notion;
-      const page = summarizePage(await notion.getPage(this.candidate.pageId));
-      const blocks = await notion.getBlockTree(this.candidate.pageId);
+      const comparison =
+        this.preloaded?.pageId === this.candidate.pageId
+          ? this.preloaded
+          : await loadComparison(this.plugin, this.file, this.candidate);
+      this.preloaded = null;
       if (token !== this.loadToken) return;
+      const { page } = comparison;
       this.candidate = { ...this.candidate, title: page.title, url: page.url };
       this.notionTitleEl.empty();
       const link = this.notionTitleEl.createEl("a", { text: page.title, href: page.url });
       link.setAttr("target", "_blank");
       this.notionTitleEl.createSpan({ cls: "notion-import-via", text: ` · ${viaLabel(this.candidate)}` });
-      this.units = blocksToUnits(blocks, { calloutStyle: this.plugin.settings.calloutStyle });
-      const note = normalizeForCompare(this.noteText);
-      this.inNote = this.units.map(unit => {
-        const text = normalizeForCompare(unit.plain);
-        return text.length >= 3 && note.includes(text);
-      });
+      this.units = comparison.units;
+      this.inNote = comparison.inNote;
+      // Start with everything that's missing ticked, so importing most of a page is one click.
+      if (this.plugin.settings.preselectMissing) this.selected = new Set(this.units.map((_, i) => i).filter(i => !this.inNote[i]));
       await this.renderList(token);
     } catch (error) {
       if (token !== this.loadToken) return;
@@ -364,24 +434,36 @@ export class CompareModal extends Modal {
         await this.app.vault.process(this.file, text => appendBlock(text, markdown));
       }
 
-      if (this.writeLink && this.candidate.via !== "property" && this.candidate.url) {
-        const wanted = this.plugin.settings.propertyName;
-        await this.app.fileManager.processFrontMatter(this.file, (frontmatter: Record<string, unknown>) => {
-          const key = Object.keys(frontmatter).find(name => name.toLowerCase() === wanted.toLowerCase()) ?? wanted;
-          frontmatter[key] = this.candidate.url;
-        });
-      }
+      if (this.writeLink && this.candidate.via !== "property") await this.saveLink();
 
       const count = this.selected.size;
       new Notice(
         `Imported ${count} Notion block${count === 1 ? "" : "s"} into “${this.file.basename}”.` +
           (failed ? ` ${failed} file${failed === 1 ? "" : "s"} could not be downloaded and kept their Notion links.` : ""),
       );
-      this.close();
+      this.decide("imported");
     } catch (error) {
       new Notice(error instanceof Error ? error.message : String(error));
-      this.importButton.setText("Import");
+      this.importButton.setText(this.review ? "Import & next" : "Import");
       this.updateCount();
+    }
+  }
+
+  private async saveLink(): Promise<void> {
+    if (!this.candidate.url) return;
+    const wanted = this.plugin.settings.propertyName;
+    await this.app.fileManager.processFrontMatter(this.file, (frontmatter: Record<string, unknown>) => {
+      const key = Object.keys(frontmatter).find(name => name.toLowerCase() === wanted.toLowerCase()) ?? wanted;
+      frontmatter[key] = this.candidate.url;
+    });
+  }
+
+  private async linkOnly(): Promise<void> {
+    try {
+      await this.saveLink();
+      this.decide("linked");
+    } catch (error) {
+      new Notice(error instanceof Error ? error.message : String(error));
     }
   }
 }

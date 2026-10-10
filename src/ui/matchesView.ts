@@ -34,7 +34,11 @@ export class MatchesView extends ItemView {
     container.addClass("notion-import-view");
 
     const header = container.createDiv({ cls: "notion-import-view-header" });
-    const scan = header.createEl("button", { cls: "mod-cta", text: this.plugin.scanning ? "Scanning…" : "Scan vault" });
+    const review = header.createEl("button", { cls: "mod-cta", text: this.plugin.scanning ? "Scanning…" : "Scan & review" });
+    review.disabled = this.plugin.scanning;
+    review.setAttr("aria-label", "Scan the vault, then compare each matched note in turn");
+    review.addEventListener("click", () => void this.plugin.scanAndReview());
+    const scan = header.createEl("button", { text: "Scan only" });
     scan.disabled = this.plugin.scanning;
     scan.addEventListener("click", () => void this.plugin.scan());
 
