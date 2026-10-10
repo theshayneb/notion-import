@@ -61,6 +61,15 @@ export interface NotionPage {
   properties: Record<string, { type: string; title?: RichText[] }>;
 }
 
+export interface NotionDatabase {
+  object: "database";
+  id: string;
+  url: string;
+  archived?: boolean;
+  in_trash?: boolean;
+  title?: RichText[];
+}
+
 export interface NotionList<T> {
   results: T[];
   has_more: boolean;

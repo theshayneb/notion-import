@@ -1,6 +1,6 @@
 {
   "name": "notion-import",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "Obsidian plugin that matches notes to Notion pages and imports selected Notion content.",
   "repository": {

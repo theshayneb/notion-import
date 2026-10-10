@@ -253,3 +253,31 @@
   background: hsla(var(--color-orange-rgb), 0.18);
   color: var(--color-orange);
 }
+
+/* Diagnose window */
+.notion-import-diag-section {
+  margin-bottom: var(--size-4-4);
+}
+
+.notion-import-diag-section h4 {
+  margin: 0 0 var(--size-4-2);
+}
+
+.notion-import-diag-line {
+  display: flex;
+  gap: var(--size-4-2);
+  margin: var(--size-4-1) 0;
+  user-select: text;
+}
+
+.notion-import-diag-mark {
+  flex: none;
+  width: 1.2em;
+  text-align: center;
+  font-weight: var(--font-bold);
+}
+
+.notion-import-diag-input {
+  width: 100%;
+  margin-bottom: var(--size-4-2);
+}

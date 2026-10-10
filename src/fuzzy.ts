@@ -114,4 +114,14 @@ export class FuzzyIndex<T> {
     hits.sort((x, y) => y.score - x.score);
     return hits.slice(0, limit);
   }
+
+  /** The best-scoring keys sharing any trigram with the query, with no threshold. */
+  closest(query: string, limit: number): FuzzyHit<T>[] {
+    const queryGrams = trigrams(query);
+    const candidates = new Set<number>();
+    for (const gram of queryGrams) for (const id of this.postings.get(gram) ?? []) candidates.add(id);
+    const hits = [...candidates].map(id => ({ item: this.items[id], score: titleSimilarity(query, this.keys[id]) }));
+    hits.sort((x, y) => y.score - x.score);
+    return hits.slice(0, limit);
+  }
 }

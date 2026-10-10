@@ -1,7 +1,7 @@
 {
   "id": "notion-import",
   "name": "Notion Import",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "minAppVersion": "1.7.2",
   "description": "Match notes to Notion pages by a frontmatter link or by title, compare them side by side, and import selected Notion blocks or sections.",
   "author": "theshayneb",

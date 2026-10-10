@@ -15,6 +15,15 @@ An Obsidian plugin that finds notes with a matching Notion page, shows the two s
 
 If neither matches, you can pick a page by searching Notion.
 
+The plugin matches against every page your integration can read. Notion's search alone can leave pages out, so it also lists every row of each shared database.
+
+**Not matching?** Right-click the note → **Diagnose Notion matching**, or run **Diagnose Notion matching for the current note**. The diagnose window shows:
+- which titles are used for matching;
+- whether **Folders to scan** includes the note;
+- how many Notion pages the plugin can read;
+- the closest Notion titles, with their similarity scores;
+- for a Notion link you paste in, whether that page is readable and how its exact title compares to the note's.
+
 To limit **Scan vault** to certain folders, list them under **Folders to scan** in settings, one per line. Subfolders are included. Leave it empty to scan the whole vault. Comparing a single note works wherever the note is.
 
 ## Using it

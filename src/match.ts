@@ -41,7 +41,7 @@ export function propertyCandidate(app: App, file: TFile, settings: NotionImportS
   return { pageId, title: "", url: raw?.startsWith("http") ? raw : `https://www.notion.so/${pageId.replace(/-/g, "")}`, via: "property" };
 }
 
-function titlesFor(app: App, file: TFile, settings: NotionImportSettings): string[] {
+export function titlesFor(app: App, file: TFile, settings: NotionImportSettings): string[] {
   const titles = [file.basename];
   if (settings.matchAliases) {
     const aliases: unknown = app.metadataCache.getFileCache(file)?.frontmatter?.aliases;
@@ -61,11 +61,18 @@ export interface TitleHit {
 export class TitleIndex {
   private readonly exact = new Map<string, NotionPageSummary[]>();
   private readonly fuzzy = new FuzzyIndex<NotionPageSummary>();
+  private readonly ids = new Map<string, NotionPageSummary>();
   readonly size: number;
 
-  private constructor(pages: NotionPageSummary[], private readonly ignoreCase: boolean) {
+  private constructor(
+    pages: NotionPageSummary[],
+    private readonly ignoreCase: boolean,
+    /** Where the pages came from, for the diagnose window. */
+    readonly stats: { fromSearch: number; fromDatabases: number; failedDatabases: string[] },
+  ) {
     this.size = pages.length;
     for (const page of pages) {
+      this.ids.set(page.id, page);
       const key = normalizeTitle(page.title, ignoreCase);
       if (key) this.exact.set(key, [...(this.exact.get(key) ?? []), page]);
       this.fuzzy.add(fuzzyKey(page.title), page);
@@ -73,7 +80,17 @@ export class TitleIndex {
   }
 
   static async build(client: NotionClient, ignoreCase: boolean): Promise<TitleIndex> {
-    return new TitleIndex(await client.searchPages(""), ignoreCase);
+    const { pages, ...stats } = await client.listAllPages();
+    return new TitleIndex(pages, ignoreCase, stats);
+  }
+
+  get(pageId: string): NotionPageSummary | undefined {
+    return this.ids.get(pageId);
+  }
+
+  /** The most similar titles regardless of strictness, for explaining near misses. */
+  closest(title: string, limit: number): TitleHit[] {
+    return this.fuzzy.closest(fuzzyKey(title), limit).map(({ item, score }) => ({ page: item, score }));
   }
 
   /**
@@ -109,7 +126,7 @@ function titleCandidates(app: App, file: TFile, settings: NotionImportSettings, 
 }
 
 /** True when no folders are listed, or the file is inside one of them (subfolders included). */
-function isInScannedFolders(file: TFile, settings: NotionImportSettings): boolean {
+export function isInScannedFolders(file: TFile, settings: NotionImportSettings): boolean {
   const folders = settings.includedFolders
     .split("\n")
     .map(folder => folder.trim().replace(/^\/+|\/+$/g, ""))

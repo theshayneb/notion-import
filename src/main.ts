@@ -4,6 +4,7 @@ import { NotionClient } from "./notion/client";
 import { DEFAULT_SETTINGS, NotionImportSettingTab, type NotionImportSettings } from "./settings";
 import { CompareModal } from "./ui/compareModal";
 import { MATCHES_VIEW_TYPE, MatchesView } from "./ui/matchesView";
+import { DiagnoseModal } from "./ui/diagnoseModal";
 import { PageSuggestModal } from "./ui/pageSuggest";
 
 export default class NotionImportPlugin extends Plugin {
@@ -58,6 +59,17 @@ export default class NotionImportPlugin extends Plugin {
       },
     });
 
+    this.addCommand({
+      id: "diagnose-current-note",
+      name: "Diagnose Notion matching for the current note",
+      checkCallback: checking => {
+        const file = this.app.workspace.getActiveFile();
+        if (!isMarkdownFile(file)) return false;
+        if (!checking) new DiagnoseModal(this, file).open();
+        return true;
+      },
+    });
+
     this.registerEvent(
       this.app.workspace.on("file-menu", (menu, file) => {
         if (!isMarkdownFile(file)) return;
@@ -66,6 +78,12 @@ export default class NotionImportPlugin extends Plugin {
             .setTitle("Compare with Notion")
             .setIcon("file-input")
             .onClick(() => void this.compareFile(file)),
+        );
+        menu.addItem(item =>
+          item
+            .setTitle("Diagnose Notion matching")
+            .setIcon("stethoscope")
+            .onClick(() => new DiagnoseModal(this, file).open()),
         );
       }),
     );

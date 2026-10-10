@@ -1,5 +1,5 @@
 import { requestUrl, type RequestUrlResponse } from "obsidian";
-import { blockContent, summarizePage, type NotionBlock, type NotionList, type NotionPage, type NotionPageSummary } from "./types";
+import { blockContent, summarizePage, type NotionBlock, type NotionDatabase, type NotionList, type NotionPage, type NotionPageSummary } from "./types";
 
 const API_ROOT = "https://api.notion.com/v1";
 const API_VERSION = "2022-06-28";
@@ -52,6 +52,62 @@ export class NotionClient {
       cursor = list.has_more ? list.next_cursor : null;
     } while (cursor && pages.length < limit);
     return pages;
+  }
+
+  /** IDs and titles of the databases shared with the integration. */
+  async searchDatabases(): Promise<NotionPageSummary[]> {
+    const databases: NotionPageSummary[] = [];
+    let cursor: string | null = null;
+    do {
+      const body: Record<string, unknown> = { filter: { property: "object", value: "database" }, page_size: 100 };
+      if (cursor) body.start_cursor = cursor;
+      const list: NotionList<NotionDatabase> = await this.request("POST", "/search", body);
+      for (const database of list.results) {
+        if (database.object !== "database" || database.archived || database.in_trash) continue;
+        databases.push({
+          id: database.id,
+          title: (database.title ?? []).map(part => part.plain_text).join("") || "Untitled",
+          url: database.url,
+        });
+      }
+      cursor = list.has_more ? list.next_cursor : null;
+    } while (cursor);
+    return databases;
+  }
+
+  /** Every row of a database. Unlike search, this is guaranteed to be complete. */
+  async queryDatabase(databaseId: string): Promise<NotionPageSummary[]> {
+    const pages: NotionPageSummary[] = [];
+    let cursor: string | null = null;
+    do {
+      const body: Record<string, unknown> = { page_size: 100 };
+      if (cursor) body.start_cursor = cursor;
+      const list: NotionList<NotionPage> = await this.request("POST", `/databases/${databaseId}/query`, body);
+      for (const page of list.results) {
+        if (page.object === "page" && !page.archived && !page.in_trash) pages.push(summarizePage(page));
+      }
+      cursor = list.has_more ? list.next_cursor : null;
+    } while (cursor);
+    return pages;
+  }
+
+  /**
+   * Every page the integration can read: what search returns, plus every row of every
+   * shared database, because search alone is not guaranteed to list everything.
+   */
+  async listAllPages(): Promise<{ pages: NotionPageSummary[]; fromSearch: number; fromDatabases: number; failedDatabases: string[] }> {
+    const byId = new Map<string, NotionPageSummary>();
+    for (const page of await this.searchPages("")) byId.set(page.id, page);
+    const fromSearch = byId.size;
+    const failedDatabases: string[] = [];
+    for (const database of await this.searchDatabases()) {
+      try {
+        for (const page of await this.queryDatabase(database.id)) if (!byId.has(page.id)) byId.set(page.id, page);
+      } catch {
+        failedDatabases.push(database.title);
+      }
+    }
+    return { pages: [...byId.values()], fromSearch, fromDatabases: byId.size - fromSearch, failedDatabases };
   }
 
   async getChildren(blockId: string): Promise<NotionBlock[]> {
