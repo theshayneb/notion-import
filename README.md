@@ -24,7 +24,7 @@ The plugin matches against every page your integration can read. Notion's search
 - the closest Notion titles, with their similarity scores;
 - for a Notion link you paste in, whether that page is readable and how its exact title compares to the note's.
 
-To limit **Scan vault** to certain folders, list them under **Folders to scan** in settings, one per line. Subfolders are included. Leave it empty to scan the whole vault. Comparing a single note works wherever the note is.
+To limit **Scan vault** to certain folders, list them under **Folders to scan** in settings, one per line. Subfolders are included, case is ignored, and a folder name matches at any depth, so `recipes` also covers `Food/Recipes`. Leave it empty to scan the whole vault. The setting shows how many notes each folder matches, and the matches panel shows how many notes each scan checked. Comparing a single note works wherever the note is.
 
 ## Using it
 

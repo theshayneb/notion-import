@@ -51,3 +51,17 @@ test("insertUnderHeading picks the right duplicate heading", () => {
   const md = "## Notes\none\n## Notes\ntwo\n";
   assert.equal(insertUnderHeading(md, { text: "Notes", occurrence: 1 }, "NEW"), "## Notes\none\n## Notes\ntwo\n\nNEW\n");
 });
+
+import { parseFolderList, pathInFolders } from "../src/text.ts";
+
+test("folder filter matches at any depth, ignoring case", () => {
+  const folders = parseFolderList(" Recipes/ \r\n\n./Work\\Projects\n");
+  assert.deepEqual(folders, ["Recipes", "Work/Projects"]);
+  assert.ok(pathInFolders("Recipes/acorn cookies.md", folders));
+  assert.ok(pathInFolders("Food/recipes/Desserts/acorn cookies.md", folders));
+  assert.ok(pathInFolders("Work/Projects/x.md", folders));
+  assert.ok(!pathInFolders("Recipes.md", folders));
+  assert.ok(!pathInFolders("Food/Recipe ideas/x.md", folders));
+  assert.ok(!pathInFolders("Projects/x.md", folders));
+  assert.ok(pathInFolders("anything.md", []));
+});

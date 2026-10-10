@@ -1,6 +1,7 @@
 import { Notice, PluginSettingTab, Setting, type App } from "obsidian";
 import type NotionImportPlugin from "./main";
 import type { CalloutStyle } from "./notion/markdown";
+import { parseFolderList, pathInFolders } from "./text";
 
 export type DefaultInsert = "end" | "cursor";
 
@@ -137,15 +138,33 @@ export class NotionImportSettingTab extends PluginSettingTab {
           }),
       );
 
-    new Setting(containerEl)
+    const folders = new Setting(containerEl)
       .setName("Folders to scan")
-      .setDesc("One folder path per line. Scanning only looks at notes in these folders and their subfolders. Leave empty to scan the whole vault.")
-      .addTextArea(text =>
-        text.setPlaceholder("Example: projects/work").setValue(settings.includedFolders).onChange(async value => {
-          settings.includedFolders = value;
-          await save();
-        }),
+      .setDesc(
+        "One folder per line. Scan vault only looks at notes inside these folders and their subfolders. " +
+          "A folder name matches at any depth and ignores case, so “recipes” also covers “Food/Recipes”. " +
+          "Leave empty to scan the whole vault.",
       );
+    const folderCounts = folders.descEl.createDiv({ cls: "notion-import-folder-counts" });
+    const showCounts = () => {
+      folderCounts.empty();
+      const files = this.app.vault.getMarkdownFiles();
+      for (const folder of parseFolderList(settings.includedFolders)) {
+        const count = files.filter(file => pathInFolders(file.path, [folder])).length;
+        folderCounts.createDiv({
+          cls: count ? "" : "notion-import-error",
+          text: `${folder}: ${count === 0 ? "no notes found. Check the folder name." : `${count} note${count === 1 ? "" : "s"}`}`,
+        });
+      }
+    };
+    folders.addTextArea(text =>
+      text.setPlaceholder("Example: recipes").setValue(settings.includedFolders).onChange(async value => {
+        settings.includedFolders = value;
+        showCounts();
+        await save();
+      }),
+    );
+    showCounts();
 
     new Setting(containerEl).setName("Importing").setHeading();
 

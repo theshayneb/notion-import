@@ -1,5 +1,5 @@
 import { Notice, Plugin, type TFile } from "obsidian";
-import { TitleIndex, isMarkdownFile, matchFile, scanVault, type NoteMatch, type NotionCandidate } from "./match";
+import { TitleIndex, isMarkdownFile, matchFile, scanVault, type NotionCandidate, type ScanResult } from "./match";
 import { NotionClient } from "./notion/client";
 import { DEFAULT_SETTINGS, NotionImportSettingTab, type NotionImportSettings } from "./settings";
 import { CompareModal } from "./ui/compareModal";
@@ -9,7 +9,7 @@ import { PageSuggestModal } from "./ui/pageSuggest";
 
 export default class NotionImportPlugin extends Plugin {
   settings: NotionImportSettings = { ...DEFAULT_SETTINGS };
-  lastScan: { matches: NoteMatch[]; pageCount: number | null } | null = null;
+  lastScan: ScanResult | null = null;
   scanError = "";
   scanning = false;
   private client: NotionClient | null = null;

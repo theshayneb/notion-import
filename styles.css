@@ -281,3 +281,7 @@
   width: 100%;
   margin-bottom: var(--size-4-2);
 }
+
+.notion-import-folder-counts {
+  margin-top: var(--size-4-1);
+}

@@ -112,3 +112,24 @@ export function insertUnderHeading(markdown: string, target: { text: string; occ
   else pieces.push("");
   return pieces.join("\n");
 }
+
+/** One folder per line; blank lines ignored, slashes and "./" tidied. */
+export function parseFolderList(text: string): string[] {
+  return text
+    .split(/\r?\n/)
+    .map(folder => folder.trim().replace(/\\/g, "/").replace(/^\.\//, "").replace(/^\/+|\/+$/g, ""))
+    .filter(Boolean);
+}
+
+/**
+ * Whether a vault path sits inside one of the folders, at any depth and ignoring case:
+ * "Recipes" matches "Recipes/Pie.md" and "Food/Recipes/Desserts/Pie.md";
+ * "Food/Recipes" matches both too, but plain "Food" only matches the second.
+ */
+export function pathInFolders(path: string, folders: string[]): boolean {
+  if (!folders.length) return true;
+  const directory = path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
+  if (!directory) return false;
+  const haystack = `/${directory.toLowerCase()}/`;
+  return folders.some(folder => haystack.includes(`/${folder.toLowerCase()}/`));
+}

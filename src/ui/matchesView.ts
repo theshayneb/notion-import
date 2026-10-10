@@ -52,8 +52,13 @@ export class MatchesView extends ItemView {
     else {
       const count = (via: string) => result.matches.filter(match => match.candidates[0].via === via).length;
       const pages = result.pageCount == null ? "" : ` (out of ${result.pageCount} Notion pages shared with the integration)`;
+      const notes =
+        result.notesChecked === result.notesTotal
+          ? `Checked all ${result.notesTotal} notes.`
+          : `Checked ${result.notesChecked} of ${result.notesTotal} notes (only those in “Folders to scan”).`;
       status.setText(
-        `${count("property")} linked by property, ${count("title")} with the same title, ${count("fuzzy")} with a similar title${pages}.`,
+        `${notes} ${count("property")} linked by property, ${count("title")} with the same title, ` +
+          `${count("fuzzy")} with a similar title${pages}.`,
       );
     }
 

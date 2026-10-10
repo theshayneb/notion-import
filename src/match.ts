@@ -3,7 +3,7 @@ import type { NotionClient } from "./notion/client";
 import type { NotionPageSummary } from "./notion/types";
 import type { NotionImportSettings } from "./settings";
 import { FuzzyIndex, fuzzyKey } from "./fuzzy";
-import { extractPageId, normalizeTitle } from "./text";
+import { extractPageId, normalizeTitle, parseFolderList, pathInFolders } from "./text";
 
 export type MatchSource = "property" | "title" | "fuzzy" | "manual";
 
@@ -127,25 +127,31 @@ function titleCandidates(app: App, file: TFile, settings: NotionImportSettings, 
 
 /** True when no folders are listed, or the file is inside one of them (subfolders included). */
 export function isInScannedFolders(file: TFile, settings: NotionImportSettings): boolean {
-  const folders = settings.includedFolders
-    .split("\n")
-    .map(folder => folder.trim().replace(/^\/+|\/+$/g, ""))
-    .filter(Boolean);
-  return !folders.length || folders.some(folder => file.path.startsWith(`${folder}/`));
+  return pathInFolders(file.path, parseFolderList(settings.includedFolders));
+}
+
+export interface ScanResult {
+  matches: NoteMatch[];
+  pageCount: number | null;
+  /** Notes the folder filter let through, out of all notes in the vault. */
+  notesChecked: number;
+  notesTotal: number;
 }
 
 export async function scanVault(
   app: App,
   settings: NotionImportSettings,
   getIndex: () => Promise<TitleIndex>,
-): Promise<{ matches: NoteMatch[]; pageCount: number | null }> {
+): Promise<ScanResult> {
   const index = settings.matchByTitle ? await getIndex() : null;
   const matches: NoteMatch[] = [];
   const files = app.vault.getMarkdownFiles();
+  let notesChecked = 0;
   for (const [i, file] of files.entries()) {
     // Let Obsidian repaint now and then; fuzzy matching a large vault takes a moment.
     if (i % 250 === 249) await new Promise(resolve => window.setTimeout(resolve, 0));
     if (!isInScannedFolders(file, settings)) continue;
+    notesChecked++;
     const linked = propertyCandidate(app, file, settings);
     if (linked) {
       matches.push({ file, candidates: [linked] });
@@ -155,7 +161,7 @@ export async function scanVault(
     if (byTitle.length) matches.push({ file, candidates: byTitle });
   }
   matches.sort((a, b) => a.file.basename.localeCompare(b.file.basename));
-  return { matches, pageCount: index ? index.size : null };
+  return { matches, pageCount: index ? index.size : null, notesChecked, notesTotal: files.length };
 }
 
 /** Candidates for one note: its link property, else Notion pages with the same or a similar title. */
