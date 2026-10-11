@@ -144,7 +144,7 @@ export class NotionClient {
   }
 
   private async request<T>(method: "GET" | "POST", path: string, body?: unknown): Promise<T> {
-    if (!this.hasToken) throw new NotionError("Add your Notion integration token in the Notion Import settings.", 0);
+    if (!this.hasToken) throw new NotionError("Add your Notion integration token in the Notion Importer settings.", 0);
     for (let attempt = 0; ; attempt++) {
       await this.throttle();
       let response: RequestUrlResponse;
@@ -197,7 +197,7 @@ function describeError(response: RequestUrlResponse): string {
   } catch {
     // Not JSON; fall through to the status-based message.
   }
-  if (response.status === 401) return "Notion rejected the token. Check it in the Notion Import settings.";
+  if (response.status === 401) return "Notion rejected the token. Check it in the Notion Importer settings.";
   if (response.status === 404) {
     return "Notion page not found. Share it with your integration (page menu → Connections) and check the link.";
   }

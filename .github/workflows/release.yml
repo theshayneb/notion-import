@@ -73,5 +73,5 @@ jobs:
             gh release upload "${VERSION}" dist/main.js dist/manifest.json dist/styles.css --clobber
           else
             gh release create "${VERSION}" dist/main.js dist/manifest.json dist/styles.css \
-              --target "${GITHUB_SHA}" --title "Notion Import ${VERSION}" --generate-notes
+              --target "${GITHUB_SHA}" --title "Notion Importer ${VERSION}" --generate-notes
           fi

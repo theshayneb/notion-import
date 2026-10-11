@@ -1,4 +1,4 @@
-# Notion Import
+# Notion Importer
 
 An Obsidian plugin that finds notes with a matching Notion page, shows the two side by side, and lets you import the Notion blocks or sections you choose into the note. Import only goes one way, from Notion into Obsidian. Nothing is ever written to Notion.
 
@@ -54,7 +54,7 @@ To limit **Scan vault** to certain folders, list them under **Folders to scan** 
 
 1. Go to [notion.so/profile/integrations](https://www.notion.so/profile/integrations) → **New integration**, choose **Internal**, and give it read content access. Copy the **Internal integration secret**.
 2. In Notion, share the pages you want with the integration: open the page's **•••** menu → **Connections** → add your integration. Sharing a parent page also shares every page under it.
-3. In Obsidian → Settings → Notion Import, paste the secret and press **Test**.
+3. In Obsidian → Settings → Notion Importer, paste the secret and press **Test**.
 
 The token is stored in `.obsidian/plugins/notion-import/data.json` inside your vault, so it syncs wherever your vault syncs.
 
@@ -80,7 +80,7 @@ The token is stored in `.obsidian/plugins/notion-import/data.json` inside your v
 
 1. Install **BRAT** from Community plugins.
 2. BRAT → **Add beta plugin** → `theshayneb/notion-import`. If the repository is private, first add a GitHub token in BRAT's settings.
-3. Enable **Notion Import** in Community plugins.
+3. Enable **Notion Importer** in Community plugins.
 
 ### Manually
 
